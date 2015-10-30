@@ -1,0 +1,10 @@
+{
+  "applications": {
+    "CrowdList": {
+      "applicationId": "oKl91rL1UjJljCDwmi1V5ZE8aF1jtLLPxN3zr1Eo"
+    },
+    "_default": {
+      "link": "CrowdList"
+    }
+  }
+}
