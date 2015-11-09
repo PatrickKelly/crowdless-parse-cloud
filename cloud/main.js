@@ -1,9 +1,9 @@
 var moment = require('moment');
 var _ = require('underscore');
 
-Parse.Cloud.afterSave("UserScore", function (request) {
+Parse.Cloud.afterSave('UserScore', function (request) {
 
-    console.log("Entering UserScore:after_save");
+    console.log('Entering UserScore:after_save');
 
     var time = moment().subtract('hours', 2).toDate();
     var userScore = Parse.Object.extend('UserScore');
@@ -39,7 +39,7 @@ Parse.Cloud.afterSave("UserScore", function (request) {
     console.log('Leaving UserScore:after_save');
 });
 
-Parse.Cloud.afterSave("CrowdScore", function (request) {
+Parse.Cloud.afterSave('CrowdScore', function (request) {
 
     var TrendingCrowdScore = Parse.Object.extend('TrendingCrowdScore');
     var trendingCrowdScoreQuery = new Parse.Query(TrendingCrowdScore);
