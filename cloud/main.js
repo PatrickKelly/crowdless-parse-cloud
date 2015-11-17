@@ -55,13 +55,13 @@ Parse.Cloud.job("UpdateCrowdScore", function (request, status) {
                                 status.success('job:UpdateCrowdScore complete. All crowd scores updated.');
                             },
                             error: function(error) {
-                                status.error('Error saving updated crowd scores: ' + error);
+                                status.error('Error saving updated crowd scores: ' + JSON.stringify(error));
                             }
                         });
                     },
 
                     error: function (error) {
-                        status.error('Error obtaining user crowd scores: ' + error);
+                        status.error('Error obtaining user crowd scores: ' + JSON.stringify(error));
                     }
                 });
 
@@ -70,7 +70,7 @@ Parse.Cloud.job("UpdateCrowdScore", function (request, status) {
             }
         },
         error: function (error) {
-            status.error('Error retrieving crowd scores greater than 150 minutes: ' + error);
+            status.error('Error retrieving crowd scores greater than 150 minutes: ' + JSON.stringify(error));
         }
     });
 
@@ -86,8 +86,6 @@ Parse.Cloud.afterSave('UserScore', function (request) {
     var query = new Parse.Query(userScore);
     var savedUserScore = request.object;
     var place = savedUserScore.get('place');
-    var userScoreUpdatedAt = savedUserScore.get('updatedAt');
-
     query.equalTo('place', place);
     query.greaterThanOrEqualTo('updatedAt', time);
     query.find({
@@ -112,12 +110,124 @@ Parse.Cloud.afterSave('UserScore', function (request) {
             }
         },
         error: function (error) {
-            console.error('Error updating crowd score after user save for request: ' + JSON.stringify(request) + ' with error: ' + error);
+            console.error('Error updating crowd score after user save for request: '
+                + JSON.stringify(request) + ' with error: ' + JSON.stringify(error));
         }
     });
 
     console.log('Leaving after_save:UserScore');
 });
+
+Parse.Cloud.afterDelete('UserScore', function(request) {
+    console.log('Entering after_delete:UserScore');
+
+    var time = moment().subtract('hours', 2).toDate();
+    var userScore = Parse.Object.extend('UserScore');
+    var query = new Parse.Query(userScore);
+    var savedUserScore = request.object;
+    var place = savedUserScore.get('place');
+    query.equalTo('place', place);
+    query.greaterThanOrEqualTo('updatedAt', time);
+    query.find({
+        success: function (results) {
+            if (results.length > 0) {
+
+                console.log('Updating crowd score for place: ' + place.id);
+
+                var CrowdScore = Parse.Object.extend('CrowdScore');
+                var cs = new CrowdScore();
+                cs.set('place', place);
+                cs.set('crowded', calculateCrowdedScore(results));
+                cs.set('parkingDifficult', calculateParkingDifficultScore(results));
+                cs.set('coverCharge', calculateCoverChargeScore(results));
+                cs.set('waitTime', calculateWaitTimeScore(results));
+                cs.set('userUpdate', true);
+                cs.save();
+
+            } else {
+                console.log('No user crowd scores returned when querying for user crowd scores ' +
+                    'after user delete for request: ' + JSON.stringify(request) + '. Resetting back to defaults.');
+
+                var CrowdScore = Parse.Object.extend('CrowdScore');
+                var cs = new CrowdScore();
+                cs.set('place', place);
+                cs.set('crowded', 0);
+                cs.set('parkingDifficult', 0);
+                cs.set('coverCharge', 0);
+                cs.set('waitTime', 0);
+                cs.set('userUpdate', true);
+                cs.save();
+            }
+        },
+        error: function (error) {
+            console.error('Error updating crowd score after user delete for request: ' + JSON.stringify(request) +
+                ' with error: ' + JSON.stringify(error));
+        }
+    });
+
+    console.log('Leaving after_delete:UserScore');
+});
+
+Parse.Cloud.beforeSave('UserScore', function(request, response) {
+    if (!request.object.get('helpfulCount')) {
+        request.object.set('helpfulCount', 0);
+    }
+
+    if (!request.object.get('reportedCount')) {
+        request.object.set('reportedCount', 0);
+    }
+
+    response.success();
+});
+
+Parse.Cloud.beforeSave('UserScorePeerComment', function (request, response) {
+    console.log('Entering after_save:UserScorePeerComment');
+
+    Parse.Cloud.useMasterKey();
+    var userScorePeerComment = request.object;
+    var userScore = request.object.get('userScore');
+
+    if (userScorePeerComment.isNew()) {
+        if (userScorePeerComment.get('helpful')) {
+            userScore.increment('helpfulCount')
+        } else {
+            userScorePeerComment.set('helpful', false);
+        }
+
+        if (userScorePeerComment.get('reported')) {
+            userScore.increment('reportedCount')
+        } else {
+            userScorePeerComment.set('reported', false);
+        }
+
+        userScore.save();
+
+    } else {
+
+        if (userScorePeerComment.dirty('helpful')) {
+            if (userScorePeerComment.get('helpful')) {
+                userScore.increment('helpfulCount')
+            } else {
+                userScore.increment('helpfulCount', -1);
+            }
+            userScore.save();
+        }
+
+        if (userScorePeerComment.dirty('reported')) {
+            if (userScorePeerComment.get('reported')) {
+                userScore.increment('reportedCount')
+            } else {
+                userScore.increment('reportedCount', -1);
+            }
+            userScore.save();
+        }
+    }
+
+    response.success();
+
+    console.log('Leaving after_save:UserScorePeerComment')
+});
+
 
 Parse.Cloud.afterSave('CrowdScore', function (request) {
 
@@ -155,7 +265,8 @@ Parse.Cloud.afterSave('CrowdScore', function (request) {
             }
         },
         error: function (error ) {
-            console.error('TrendingCrowdScore lookup failed with request: ' + request + ' with error: ' + error);
+            console.error('TrendingCrowdScore lookup failed with request: ' + JSON.stringify(request) + ' with error: '
+                + JSON.stringify( error));
         }
     });
 
