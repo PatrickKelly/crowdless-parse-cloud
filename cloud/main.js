@@ -72,93 +72,132 @@ Parse.Cloud.afterSave('UserScore', function (request) {
     console.log('Entering after_save:UserScore');
 
     var savedUserScore = request.object;
+    var createdAt = request.object.get("createdAt");
+    var updatedAt = request.object.get("updatedAt");
+    var objectExisted = (createdAt.getTime() != updatedAt.getTime());
 
-    var userScore = Parse.Object.extend('UserScore');
-    var query = new Parse.Query(userScore);
+    if (moment(savedUserScore.get('createdAt')).unix() >= (moment().subtract('hours', 2)).unix()) {
+        var userScore = Parse.Object.extend('UserScore');
+        var query = new Parse.Query(userScore);
 
-    var time = moment(savedUserScore.get('createdAt')).subtract('hours', 2).toDate();
-    var place = savedUserScore.get('place');
-    var crowdScore = savedUserScore.get('crowdScore');
-    query.equalTo('place', place);
-    query.greaterThanOrEqualTo('createdAt', time);
-    query.find({
-        success: function (results) {
-            if (results.length > 0) {
+        var time = moment().subtract('hours', 2).toDate();
+        var place = savedUserScore.get('place');
+        var crowdScore = savedUserScore.get('crowdScore');
+        query.equalTo('place', place);
+        query.greaterThanOrEqualTo('createdAt', time);
+        query.find({
+            success: function (results) {
+                if (results.length > 0) {
 
-                console.log('Updating crowd score for place: ' + place.id);
-                crowdScore.set('place', place);
-                crowdScore.set('crowded', calculateCrowdedScore(results));
-                crowdScore.set('parkingDifficult', calculateParkingDifficultScore(results));
-                crowdScore.set('coverCharge', calculateCoverChargeScore(results));
-                crowdScore.set('waitTime', calculateWaitTimeScore(results));
-                crowdScore.set('lastUserUpdateTime', savedUserScore.get('createdAt'));
-                crowdScore.increment('recentUserScoreCount');
-                crowdScore.save();
+                    console.log('Updating crowd score for place: ' + place.id);
+                    crowdScore.set('place', place);
+                    crowdScore.set('crowded', calculateCrowdedScore(results));
+                    crowdScore.set('parkingDifficult', calculateParkingDifficultScore(results));
+                    crowdScore.set('coverCharge', calculateCoverChargeScore(results));
+                    crowdScore.set('waitTime', calculateWaitTimeScore(results));
+                    crowdScore.set('lastUserUpdateTime', savedUserScore.get('createdAt'));
+                    if (!objectExisted) {
+                        crowdScore.increment('recentUserScoreCount');
+                    }
 
-            } else {
-                console.error('No user crowd scores returned when querying for user crowd scores ' +
-                    'after user save for request: ' + JSON.stringify(request));
+                    crowdScore.save();
+
+                } else {
+                    console.error('No user crowd scores returned when querying for user crowd scores ' +
+                        'after user save for request: ' + JSON.stringify(request));
+                }
+            },
+            error: function (error) {
+                console.error('Error updating crowd score after user save for request: '
+                    + JSON.stringify(request) + ' with error: ' + JSON.stringify(error));
             }
-        },
-        error: function (error) {
-            console.error('Error updating crowd score after user save for request: '
-                + JSON.stringify(request) + ' with error: ' + JSON.stringify(error));
-        }
-    });
+        });
+    }
 
     console.log('Leaving after_save:UserScore');
 });
 
-Parse.Cloud.afterDelete('UserScore', function(request) {
+Parse.Cloud.afterDelete('UserScore', function (request) {
     console.log('Entering after_delete:UserScore');
 
     var deletedUserScore = request.object;
 
-    var userScoreCreatedAt = deletedUserScore.get('createdAt');
     if (moment(deletedUserScore.get('createdAt')).unix() >= (moment().subtract('hours', 2)).unix()) {
-      var userScore = Parse.Object.extend('UserScore');
-      var query = new Parse.Query(userScore);
+        var userScore = Parse.Object.extend('UserScore');
+        var query = new Parse.Query(userScore);
 
-      var time = moment().subtract('hours', 2).toDate();
-      var place = deletedUserScore.get('place');
-      var crowdScore = deletedUserScore.get('crowdScore');
-      query.equalTo('place', place);
-      query.descending("createdAt");
-      query.greaterThanOrEqualTo('createdAt', time);
-      query.find({
-          success: function (results) {
-              if (results.length > 0) {
+        var time = moment().subtract('hours', 2).toDate();
+        var place = deletedUserScore.get('place');
+        var crowdScore = deletedUserScore.get('crowdScore');
+        query.equalTo('place', place);
+        query.descending("createdAt");
+        query.greaterThanOrEqualTo('createdAt', time);
+        query.find({
+            success: function (results) {
+                if (results.length > 0) {
 
-                  console.log('Updating crowd score for place: ' + place.id);
-                  crowdScore.set('place', place);
-                  crowdScore.set('crowded', calculateCrowdedScore(results));
-                  crowdScore.set('parkingDifficult', calculateParkingDifficultScore(results));
-                  crowdScore.set('coverCharge', calculateCoverChargeScore(results));
-                  crowdScore.set('waitTime', calculateWaitTimeScore(results));
-                  crowdScore.set('lastUserUpdateTime', results[0].get('createdAt'));
-                  crowdScore.increment('recentUserScoreCount', -1);
-                  crowdScore.save();
+                    console.log('Updating crowd score for place: ' + place.id);
+                    crowdScore.set('place', place);
+                    crowdScore.set('crowded', calculateCrowdedScore(results));
+                    crowdScore.set('parkingDifficult', calculateParkingDifficultScore(results));
+                    crowdScore.set('coverCharge', calculateCoverChargeScore(results));
+                    crowdScore.set('waitTime', calculateWaitTimeScore(results));
+                    crowdScore.set('lastUserUpdateTime', results[0].get('createdAt'));
+                    crowdScore.increment('recentUserScoreCount', -1);
+                    crowdScore.save();
 
-              } else {
-                  console.log('No user crowd scores returned when querying for user crowd scores ' +
-                      'after user delete for request: ' + JSON.stringify(request) + '. Resetting back to defaults.');
+                } else {
+                    console.log('No user crowd scores returned when querying for user crowd scores ' +
+                        'after user delete for request: ' + JSON.stringify(request) + '. Resetting back to defaults.');
 
-                  crowdScore.set('place', place);
-                  crowdScore.set('crowded', 0);
-                  crowdScore.set('parkingDifficult', 0);
-                  crowdScore.set('coverCharge', 0);
-                  crowdScore.set('waitTime', 0);
-                  crowdScore.unset('lastUserUpdateTime');
-                  crowdScore.set('recentUserScoreCount', 0);
-                  crowdScore.save();
-              }
-          },
-          error: function (error) {
-              console.error('Error updating crowd score after user delete for request: ' + JSON.stringify(request) +
-                  ' with error: ' + JSON.stringify(error));
-          }
-      });
-  }
+                    crowdScore.set('place', place);
+                    crowdScore.set('crowded', 0);
+                    crowdScore.set('parkingDifficult', 0);
+                    crowdScore.set('coverCharge', 0);
+                    crowdScore.set('waitTime', 0);
+                    crowdScore.unset('lastUserUpdateTime');
+                    crowdScore.set('recentUserScoreCount', 0);
+                    crowdScore.save();
+                }
+            },
+            error: function (error) {
+                console.error('Error updating crowd score after user delete for request: ' + JSON.stringify(request) +
+                    ' with error: ' + JSON.stringify(error));
+            }
+        });
+    } else {
+        var userScore = Parse.Object.extend('UserScore');
+        var query = new Parse.Query(userScore);
+
+        var place = deletedUserScore.get('place');
+        var crowdScore = deletedUserScore.get('crowdScore');
+
+        query.equalTo('place', place);
+        query.descending("createdAt");
+        query.limit = 1;
+        query.find({
+            success: function (results) {
+
+                console.log('Updating crowd score for place: ' + place.id);
+                crowdScore.set('place', place);
+                crowdScore.set('crowded', 0);
+                crowdScore.set('parkingDifficult', 0);
+                crowdScore.set('coverCharge', 0);
+                crowdScore.set('waitTime', 0);
+                if (results.length > 0) {
+                    crowdScore.set('lastUserUpdateTime', results[0].get('createdAt'));
+                } else {
+                    crowdScore.unset('lastUserUpdateTime');
+                }
+                crowdScore.set('recentUserScoreCount', 0);
+                crowdScore.save();
+            },
+            error: function (error) {
+                console.error('Error updating crowd score after user delete for request: ' + JSON.stringify(request) +
+                    ' with error: ' + JSON.stringify(error));
+            }
+        });
+    }
 
     console.log('Leaving after_delete:UserScore');
 });
