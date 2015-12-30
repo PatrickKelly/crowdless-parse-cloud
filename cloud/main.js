@@ -239,7 +239,7 @@ Parse.Cloud.beforeSave('UserScore', function(request, response) {
 });
 
 Parse.Cloud.beforeSave('UserScorePeerComment', function (request, response) {
-    console.log('Entering after_save:UserScorePeerComment');
+    console.log('Entering before_save:UserScorePeerComment');
 
     Parse.Cloud.useMasterKey();
     var userScorePeerComment = request.object;
@@ -258,8 +258,18 @@ Parse.Cloud.beforeSave('UserScorePeerComment', function (request, response) {
             userScorePeerComment.set('reported', false);
         }
 
-        userScore.save();
-
+        userScore.save(null, {
+            success: function(userScore) {
+                console.log('UserScore saved successfully in UserScorePeerComment before_save');
+                response.success();
+            },
+            error: function(userScore, error) {
+                console.log('An error occurred saving the UserScore in UserScorePeerComment before_save: ' +
+                    JSON.stringify(error));
+                response.error('An error occurred saving the UserScore in UserScorePeerComment before_save: ' +
+                    JSON.stringify(error));
+            }
+        });
     } else {
 
         if (userScorePeerComment.dirty('helpful')) {
@@ -268,7 +278,6 @@ Parse.Cloud.beforeSave('UserScorePeerComment', function (request, response) {
             } else {
                 userScore.increment('helpfulCount', -1);
             }
-            userScore.save();
         }
 
         if (userScorePeerComment.dirty('reported')) {
@@ -277,13 +286,23 @@ Parse.Cloud.beforeSave('UserScorePeerComment', function (request, response) {
             } else {
                 userScore.increment('reportedCount', -1);
             }
-            userScore.save();
         }
+
+        userScore.save(null, {
+            success: function(userScore) {
+                console.log('UserScore saved successfully in UserScorePeerComment before_save');
+                response.success();
+            },
+            error: function(userScore, error) {
+                console.log('An error occurred saving the UserScore in UserScorePeerComment before_save: ' +
+                    JSON.stringify(error));
+                response.error('An error occurred saving the UserScore in UserScorePeerComment before_save: ' +
+                    JSON.stringify(error));
+            }
+        });
     }
 
-    response.success();
-
-    console.log('Leaving after_save:UserScorePeerComment')
+    console.log('Leaving before_save:UserScorePeerComment')
 });
 
 function calculateAverage(elements) {
